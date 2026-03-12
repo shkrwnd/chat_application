@@ -31,6 +31,29 @@ router.post('/', verifyToken, (req, res) => {
   res.status(201).json(room);
 });
 
+router.get('/search', verifyToken, (req, res) => {
+  const { q, limit = '20' } = req.query;
+
+  if (!q || q.trim().length < 2) {
+    return res.json([]);
+  }
+
+  // Escape SQL LIKE wildcards so literal % and _ in the query are treated as text
+  const escaped = q.trim().replace(/[%_\\]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+  const results = db.prepare(`
+    SELECT m.id, m.room_id, r.name AS room_name,
+           m.user_id, m.username, m.content, m.created_at
+    FROM messages m
+    JOIN rooms r ON m.room_id = r.id
+    WHERE m.content LIKE ? ESCAPE '\\'
+    ORDER BY m.created_at DESC
+    LIMIT ?
+  `).all(pattern, Number(limit));
+
+  res.json(results);
+});
+
 router.get('/:id/messages', verifyToken, (req, res) => {
   const { limit = '50', before } = req.query;
   const params = [req.params.id];

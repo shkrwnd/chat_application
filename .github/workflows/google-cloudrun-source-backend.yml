@@ -1,0 +1,51 @@
+# This workflow deploys the backend (Node/Express) to Cloud Run when server code changes.
+#
+# Configure the same APIs and Workload Identity as the frontend workflow.
+# Set these env vars on the Cloud Run backend service (Variables & secrets):
+#   DB_PATH=/tmp/chat.db
+#   UPLOAD_DIR=/tmp/uploads
+#   CLIENT_ORIGIN=https://YOUR-FRONTEND-URL.run.app  (optional, for CORS)
+
+name: 'Deploy to Cloud Run Backend from Source'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+
+env:
+  PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID
+  REGION: 'us-central1' # TODO: update to your region
+  SERVICE: 'chat-server' # TODO: update to your backend Cloud Run service name
+
+jobs:
+  deploy:
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332' # actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider' # TODO: replace with your workload identity provider
+
+      - id: deploy
+        name: 'Deploy to Cloud Run'
+        uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
+        with:
+          service: '${{ env.SERVICE }}'
+          region: '${{ env.REGION }}'
+          source: './server'
+
+      - name: 'Show output'
+        run: |-
+          echo ${{ steps.deploy.outputs.url }}

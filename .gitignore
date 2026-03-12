@@ -1,0 +1,54 @@
+# Node / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Dependencies cache
+.pnp.*
+.parcel-cache/
+.turbo/
+.next/
+dist/
+build/
+coverage/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# SQLite database
+chat.db
+chat.db-shm
+chat.db-wal
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Frontend / backend env files
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+
+# OS files
+Thumbs.db
+
+# Cursor / tooling
+.cursor/
+.agents/
+.claude/
+skills-lock.json
+agent-transcripts/
+
+# Local claudemcp tooling
+package.json
+package-lock.json
+

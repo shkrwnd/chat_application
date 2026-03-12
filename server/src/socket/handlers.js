@@ -37,21 +37,24 @@ function registerHandlers(io, socket) {
     leaveRoom(io, socket, roomId);
   });
 
-  socket.on('send_message', ({ roomId, content }) => {
-    if (!content || !content.trim()) return;
+  socket.on('send_message', ({ roomId, content, attachments }) => {
+    const trimmed = (content || '').trim();
+    const safeAttachments = Array.isArray(attachments) ? attachments : [];
+    if (!trimmed && safeAttachments.length === 0) return;
 
     const message = {
       id: uuidv4(),
       room_id: roomId,
       user_id: user.id,
       username: user.username,
-      content: content.trim(),
+      content: trimmed,
+      attachments: safeAttachments,
       created_at: Date.now(),
     };
 
     db.prepare(
-      'INSERT INTO messages (id, room_id, user_id, username, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(message.id, message.room_id, message.user_id, message.username, message.content, message.created_at);
+      'INSERT INTO messages (id, room_id, user_id, username, content, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(message.id, message.room_id, message.user_id, message.username, message.content, JSON.stringify(safeAttachments), message.created_at);
 
     io.to(roomId).emit('message', message);
   });

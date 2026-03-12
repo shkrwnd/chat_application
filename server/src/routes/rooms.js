@@ -5,6 +5,15 @@ const { verifyToken } = require('../auth');
 
 const router = express.Router();
 
+function parseAttachments(msg) {
+  try {
+    msg.attachments = msg.attachments ? JSON.parse(msg.attachments) : [];
+  } catch {
+    msg.attachments = [];
+  }
+  return msg;
+}
+
 router.get('/', verifyToken, (_req, res) => {
   const rooms = db.prepare('SELECT * FROM rooms ORDER BY created_at DESC').all();
   res.json(rooms);
@@ -67,7 +76,7 @@ router.get('/:id/messages', verifyToken, (req, res) => {
   query += ' ORDER BY created_at DESC LIMIT ?';
   params.push(Number(limit));
 
-  const messages = db.prepare(query).all(...params).reverse();
+  const messages = db.prepare(query).all(...params).reverse().map(parseAttachments);
   res.json(messages);
 });
 

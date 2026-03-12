@@ -45,6 +45,13 @@ db.exec(`
   );
 `);
 
+// Migration: add attachments column to messages if it doesn't exist yet
+try {
+  db.exec("ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'");
+} catch (_) {
+  // Column already exists — safe to ignore
+}
+
 // Clear stale presence on server start (all previous sockets are gone)
 db.exec('DELETE FROM room_members');
 

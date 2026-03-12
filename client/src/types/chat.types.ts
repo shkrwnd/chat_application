@@ -1,9 +1,16 @@
+export interface Attachment {
+  url: string;
+  filename: string;
+  type: string; // MIME type
+}
+
 export interface Message {
   id: string;
   room_id: string;
   user_id: string;
   username: string;
   content: string;
+  attachments?: Attachment[];
   created_at: number;
 }
 

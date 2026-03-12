@@ -35,6 +35,7 @@ on:
       - main
     paths:
       - 'client/**'
+  workflow_dispatch: # Run manually from Actions tab
 
 env:
   PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID

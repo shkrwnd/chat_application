@@ -32,7 +32,9 @@ name: 'Deploy to Cloud Run from Source'
 on:
   push:
     branches:
-      - '"main"'
+      - main
+    paths:
+      - 'client/**'
 
 env:
   PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID
@@ -61,13 +63,14 @@ jobs:
         with:
           workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider' # TODO: replace with your workload identity provider
 
-      - name: 'Deploy to Cloud Run'
+      - id: deploy
+        name: 'Deploy to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
         with:
           service: '${{ env.SERVICE }}'
           region: '${{ env.REGION }}'
-          # NOTE: If using a different source folder, update the image name below:
-          source: './'
+          # Frontend lives in client/; use it as source so buildpack builds from there
+          source: './client'
 
       # If required, use the Cloud Run URL output in later steps
       - name: 'Show output'

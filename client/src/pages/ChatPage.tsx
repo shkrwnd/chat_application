@@ -7,6 +7,8 @@ import { SearchModal } from '../components/shared/SearchModal';
 import { MessageList } from '../components/chat/MessageList';
 import { MessageInput } from '../components/chat/MessageInput';
 import { MessageToast } from '../components/ui/MessageToast';
+import { CallPanel } from '../components/call/CallPanel';
+import { useWebRTC } from '../hooks/useWebRTC';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
 import { useNotifications } from '../hooks/useNotifications';
@@ -27,6 +29,21 @@ export function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | undefined>();
   const [inAppToast, setInAppToast] = useState<{ roomId: string; roomName: string; username: string; content: string } | null>(null);
+
+  // WebRTC voice / video
+  const {
+    callActive,
+    callType,
+    localStream,
+    remoteParticipants,
+    roomCallParticipants,
+    isMuted,
+    isCameraOff,
+    joinCall,
+    leaveCall,
+    toggleMute,
+    toggleCamera,
+  } = useWebRTC(socket, user!.id, activeRoom?.id ?? null);
 
   // Presence state
   // readReceipts[roomId][userId] = ReadReceipt
@@ -301,7 +318,25 @@ export function ChatPage() {
               room={activeRoom}
               memberCount={activeUsers.length}
               onSearchOpen={() => setSearchOpen(true)}
+              callActive={callActive}
+              callParticipantCount={roomCallParticipants.length}
+              onJoinCall={joinCall}
             />
+
+            {/* Call panel — shown when user is in an active call */}
+            {callActive && callType && (
+              <CallPanel
+                callType={callType}
+                localStream={localStream}
+                remoteParticipants={remoteParticipants}
+                currentUsername={user!.username}
+                isMuted={isMuted}
+                isCameraOff={isCameraOff}
+                onToggleMute={toggleMute}
+                onToggleCamera={toggleCamera}
+                onLeave={leaveCall}
+              />
+            )}
 
             {activeRoom ? (
               <>

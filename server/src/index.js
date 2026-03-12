@@ -21,8 +21,9 @@ const io = new Server(server, {
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve uploaded files (use UPLOAD_DIR so Cloud Run can use /tmp)
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadDir));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
@@ -34,6 +35,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(Number(PORT), HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
 });

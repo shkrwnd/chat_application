@@ -19,6 +19,14 @@ export interface TypingEvent {
   isTyping: boolean;
 }
 
+export interface ReadReceipt {
+  userId: string;
+  username: string;
+  messageId: string;
+}
+
+export type UserStatus = 'online' | 'away' | 'offline';
+
 export interface SearchResult {
   id: string;
   room_id: string;

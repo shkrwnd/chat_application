@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, type KeyboardEvent, type FormEvent } fro
 import { useSocket } from '../../hooks/useSocket';
 import { TypingIndicator } from './TypingIndicator';
 import { uploadFile } from '../../services/uploadService';
+import { resolveBackendUrl } from '../../utils/backendUrl';
 import type { Attachment } from '../../types';
 
 interface MessageInputProps {
@@ -104,7 +105,7 @@ export function MessageInput({ roomId, typingUsers }: MessageInputProps) {
             <div key={i} className="relative group">
               {att.type.startsWith('image/') ? (
                 <img
-                  src={att.url}
+                  src={resolveBackendUrl(att.url)}
                   alt={att.filename}
                   className="w-16 h-16 object-cover rounded-lg border border-gray-700"
                 />

@@ -5,6 +5,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { Avatar } from '../ui/avatar';
 import { formatTimestamp } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
+import { resolveBackendUrl } from '../../utils/backendUrl';
 import { LinkPreviewCard } from './LinkPreviewCard';
 import { extractFirstUrl, getLinkPreview, type LinkPreview } from '../../services/linkPreviewService';
 import type { Message as MessageType } from '../../types';
@@ -14,6 +15,7 @@ interface MessageProps {
   isOwn: boolean;
   isGrouped: boolean;
   highlighted?: boolean;
+  readers?: string[]; // usernames who last-read this message
 }
 
 const mdComponents = {
@@ -54,7 +56,7 @@ const mdComponents = {
   ),
 };
 
-export function Message({ message, isOwn, isGrouped, highlighted }: MessageProps) {
+export function Message({ message, isOwn, isGrouped, highlighted, readers = [] }: MessageProps) {
   const [isHighlighted, setIsHighlighted] = useState(false);
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
 
@@ -118,9 +120,9 @@ export function Message({ message, isOwn, isGrouped, highlighted }: MessageProps
           <div className="mt-2 flex flex-wrap gap-2">
             {message.attachments!.map((att, i) =>
               att.type.startsWith('image/') ? (
-                <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
+                <a key={i} href={resolveBackendUrl(att.url)} target="_blank" rel="noopener noreferrer">
                   <img
-                    src={att.url}
+                    src={resolveBackendUrl(att.url)}
                     alt={att.filename}
                     className="max-w-xs max-h-48 rounded-lg border border-gray-700 object-cover hover:border-gray-500 transition-colors"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
@@ -129,7 +131,7 @@ export function Message({ message, isOwn, isGrouped, highlighted }: MessageProps
               ) : (
                 <a
                   key={i}
-                  href={att.url}
+                  href={resolveBackendUrl(att.url)}
                   download={att.filename}
                   className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
                 >
@@ -146,6 +148,26 @@ export function Message({ message, isOwn, isGrouped, highlighted }: MessageProps
         {/* Link preview */}
         {linkPreview && linkUrl && (
           <LinkPreviewCard url={linkUrl} preview={linkPreview} />
+        )}
+
+        {/* Read receipts — show whose last-read was this message */}
+        {readers.length > 0 && (
+          <div className="flex items-center justify-end gap-1 mt-1">
+            <span className="text-[10px] text-gray-600">Seen</span>
+            <div className="flex -space-x-1">
+              {readers.slice(0, 4).map((username) => (
+                <Avatar
+                  key={username}
+                  username={username}
+                  size="sm"
+                  className="w-3.5 h-3.5 text-[8px] ring-1 ring-gray-900"
+                />
+              ))}
+            </div>
+            {readers.length > 4 && (
+              <span className="text-[10px] text-gray-600">+{readers.length - 4}</span>
+            )}
+          </div>
         )}
       </div>
     </div>

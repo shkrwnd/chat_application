@@ -5,6 +5,12 @@ const { verifySocketToken } = require('../auth');
 // Map<roomId, Map<socketId, { userId, username }>>
 const roomUsers = new Map();
 
+// Map<roomId, Map<userId, { username, messageId }>>
+const readReceipts = new Map();
+
+// Map<userId, { username, status: 'online'|'away', socketCount }>
+const userStatuses = new Map();
+
 function registerHandlers(io, socket) {
   const user = verifySocketToken(socket.handshake.auth?.token);
 
@@ -15,6 +21,23 @@ function registerHandlers(io, socket) {
 
   socket.userId = user.id;
   socket.username = user.username;
+
+  // Track online presence — multiple tabs share the same userId
+  if (userStatuses.has(user.id)) {
+    const s = userStatuses.get(user.id);
+    userStatuses.set(user.id, { ...s, socketCount: s.socketCount + 1, status: 'online' });
+  } else {
+    userStatuses.set(user.id, { username: user.username, status: 'online', socketCount: 1 });
+  }
+  io.emit('user_status_change', { userId: user.id, username: user.username, status: 'online' });
+
+  // Send the current status snapshot to this socket only
+  const statuses = Array.from(userStatuses.entries()).map(([uid, data]) => ({
+    userId: uid,
+    username: data.username,
+    status: data.status,
+  }));
+  socket.emit('user_statuses', statuses);
 
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
@@ -31,6 +54,12 @@ function registerHandlers(io, socket) {
     socket.to(roomId).emit('user_joined', { userId: user.id, username: user.username });
     // Broadcast to ALL clients so every sidebar stays in sync
     io.emit('room_members_update', { roomId, members });
+
+    // Send existing read receipts for this room to the joiner
+    if (readReceipts.has(roomId)) {
+      const receipts = Object.fromEntries(readReceipts.get(roomId));
+      socket.emit('room_read_receipts', { roomId, receipts });
+    }
   });
 
   socket.on('leave_room', (roomId) => {
@@ -67,9 +96,42 @@ function registerHandlers(io, socket) {
     socket.to(roomId).emit('typing', { username: user.username, isTyping: false });
   });
 
+  // Read receipt: client tells server "I've read up to messageId in roomId"
+  socket.on('read_messages', ({ roomId, messageId }) => {
+    if (!roomId || !messageId) return;
+    if (!readReceipts.has(roomId)) readReceipts.set(roomId, new Map());
+    readReceipts.get(roomId).set(user.id, { username: user.username, messageId });
+    // Broadcast to everyone in the room so their UI updates
+    io.to(roomId).emit('messages_read', {
+      roomId,
+      userId: user.id,
+      username: user.username,
+      messageId,
+    });
+  });
+
+  // Presence: client sends 'online' when tab is visible, 'away' when hidden
+  socket.on('user_status', ({ status }) => {
+    if (status !== 'online' && status !== 'away') return;
+    const current = userStatuses.get(user.id);
+    if (!current) return;
+    userStatuses.set(user.id, { ...current, status });
+    io.emit('user_status_change', { userId: user.id, username: user.username, status });
+  });
+
   socket.on('disconnecting', () => {
     for (const roomId of socket.rooms) {
       if (roomId !== socket.id) leaveRoom(io, socket, roomId);
+    }
+
+    const current = userStatuses.get(user.id);
+    if (current) {
+      if (current.socketCount <= 1) {
+        userStatuses.delete(user.id);
+        io.emit('user_status_change', { userId: user.id, username: user.username, status: 'offline' });
+      } else {
+        userStatuses.set(user.id, { ...current, socketCount: current.socketCount - 1 });
+      }
     }
   });
 }

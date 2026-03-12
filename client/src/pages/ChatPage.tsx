@@ -12,7 +12,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useNotifications } from '../hooks/useNotifications';
 import { getRooms } from '../services/roomService';
 import { getMessages } from '../services/messageService';
-import type { Room, Message, RoomMember, SearchResult } from '../types';
+import type { Room, Message, RoomMember, SearchResult, ReadReceipt, UserStatus } from '../types';
 
 export function ChatPage() {
   const { user, logout } = useAuth();
@@ -27,6 +27,12 @@ export function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | undefined>();
   const [inAppToast, setInAppToast] = useState<{ roomId: string; roomName: string; username: string; content: string } | null>(null);
+
+  // Presence state
+  // readReceipts[roomId][userId] = ReadReceipt
+  const [readReceipts, setReadReceipts] = useState<Record<string, Record<string, ReadReceipt>>>({});
+  // userStatuses[userId] = 'online' | 'away'  (absent = offline)
+  const [userStatuses, setUserStatuses] = useState<Record<string, UserStatus>>({});
 
   const pendingHighlightRef = useRef<string | null>(null);
   // Stable ref to rooms so socket handlers never read stale state
@@ -57,9 +63,17 @@ export function ChatPage() {
       setHighlightMessageId(undefined);
       setUnreadCounts((prev) => ({ ...prev, [room.id]: 0 }));
 
+      // Join first so server registers us in the room before we emit read_messages
+      socket?.emit('join_room', room.id);
+
       try {
         const history = await getMessages(room.id);
         setMessages(history);
+
+        // Mark the last message as read
+        if (history.length > 0) {
+          socket?.emit('read_messages', { roomId: room.id, messageId: history[history.length - 1].id });
+        }
 
         if (pendingHighlightRef.current) {
           const id = pendingHighlightRef.current;
@@ -70,8 +84,6 @@ export function ChatPage() {
         console.error(e);
         pendingHighlightRef.current = null;
       }
-
-      socket?.emit('join_room', room.id);
     },
     [socket, activeRoom]
   );
@@ -103,6 +115,16 @@ export function ChatPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Track tab visibility and report presence status to server
+  useEffect(() => {
+    if (!socket) return;
+    const handleVisibility = () => {
+      socket.emit('user_status', { status: document.hidden ? 'away' : 'online' });
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [socket]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -124,6 +146,9 @@ export function ChatPage() {
           if (document.visibilityState === 'visible' && document.hasFocus()) {
             setInAppToast({ roomId: msg.room_id, roomName: room?.name ?? msg.room_id, username: msg.username, content: msg.content });
           }
+        } else {
+          // Message arrived in the active room — immediately mark as read
+          socket.emit('read_messages', { roomId: msg.room_id, messageId: msg.id });
         }
         return current;
       });
@@ -141,16 +166,60 @@ export function ChatPage() {
       );
     };
 
+    // Read receipts
+    const handleMessagesRead = ({ roomId, userId, username, messageId }: { roomId: string; userId: string; username: string; messageId: string }) => {
+      setReadReceipts((prev) => ({
+        ...prev,
+        [roomId]: { ...(prev[roomId] ?? {}), [userId]: { userId, username, messageId } },
+      }));
+    };
+
+    const handleRoomReadReceipts = ({ roomId, receipts }: { roomId: string; receipts: Record<string, { username: string; messageId: string }> }) => {
+      const converted: Record<string, ReadReceipt> = {};
+      Object.entries(receipts).forEach(([uid, r]) => {
+        converted[uid] = { userId: uid, username: r.username, messageId: r.messageId };
+      });
+      setReadReceipts((prev) => ({ ...prev, [roomId]: { ...(prev[roomId] ?? {}), ...converted } }));
+    };
+
+    // Presence
+    const handleUserStatuses = (statuses: { userId: string; username: string; status: UserStatus }[]) => {
+      setUserStatuses(() => {
+        const next: Record<string, UserStatus> = {};
+        statuses.forEach(({ userId, status }) => { if (status !== 'offline') next[userId] = status; });
+        return next;
+      });
+    };
+
+    const handleUserStatusChange = ({ userId, status }: { userId: string; status: UserStatus }) => {
+      setUserStatuses((prev) => {
+        if (status === 'offline') {
+          const next = { ...prev };
+          delete next[userId];
+          return next;
+        }
+        return { ...prev, [userId]: status };
+      });
+    };
+
     socket.on('message', handleMessage);
     socket.on('active_users', handleActiveUsers);
     socket.on('room_members_update', handleRoomMembersUpdate);
     socket.on('typing', handleTyping);
+    socket.on('messages_read', handleMessagesRead);
+    socket.on('room_read_receipts', handleRoomReadReceipts);
+    socket.on('user_statuses', handleUserStatuses);
+    socket.on('user_status_change', handleUserStatusChange);
 
     return () => {
       socket.off('message', handleMessage);
       socket.off('active_users', handleActiveUsers);
       socket.off('room_members_update', handleRoomMembersUpdate);
       socket.off('typing', handleTyping);
+      socket.off('messages_read', handleMessagesRead);
+      socket.off('room_read_receipts', handleRoomReadReceipts);
+      socket.off('user_statuses', handleUserStatuses);
+      socket.off('user_status_change', handleUserStatusChange);
     };
   }, [socket, notify]);
 
@@ -178,6 +247,8 @@ export function ChatPage() {
     },
     [rooms, activeRoom, selectRoom]
   );
+
+  const activeRoomReceipts = activeRoom ? (readReceipts[activeRoom.id] ?? {}) : {};
 
   return (
     <>
@@ -238,6 +309,7 @@ export function ChatPage() {
                   messages={messages}
                   currentUserId={user!.id}
                   highlightMessageId={highlightMessageId}
+                  readReceipts={activeRoomReceipts}
                 />
                 <MessageInput roomId={activeRoom.id} typingUsers={typingUsers} />
               </>
@@ -266,7 +338,7 @@ export function ChatPage() {
             )}
           </div>
         }
-        userList={<UserList users={activeUsers} currentUserId={user!.id} />}
+        userList={<UserList users={activeUsers} currentUserId={user!.id} userStatuses={userStatuses} />}
       />
     </>
   );

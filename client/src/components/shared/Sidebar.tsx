@@ -3,28 +3,38 @@ import { RoomItem } from '../rooms/RoomItem';
 import { CreateRoomModal } from '../rooms/CreateRoomModal';
 import { Avatar } from '../ui/avatar';
 import { Button } from '../ui/button';
-import type { Room, User } from '../../types';
+import type { Room, RoomMember, User } from '../../types';
 
 interface SidebarProps {
   rooms: Room[];
   activeRoom: Room | null;
   unreadCounts: Record<string, number>;
+  roomMembers: Record<string, RoomMember[]>;
   onSelectRoom: (room: Room) => void;
   onRoomCreated: (room: Room) => void;
   user: User;
   onLogout: () => void;
+  notificationPermission: NotificationPermission;
+  onRequestPermission: () => void;
 }
 
 export function Sidebar({
   rooms,
   activeRoom,
   unreadCounts,
+  roomMembers,
   onSelectRoom,
   onRoomCreated,
   user,
   onLogout,
+  notificationPermission,
+  onRequestPermission,
 }: SidebarProps) {
   const [showModal, setShowModal] = useState(false);
+  const [permissionDismissed, setPermissionDismissed] = useState(false);
+
+  const showPermissionPrompt =
+    notificationPermission === 'default' && !permissionDismissed;
 
   return (
     <div className="flex flex-col h-full">
@@ -39,6 +49,36 @@ export function Sidebar({
           <span className="font-semibold text-white text-sm">ChatRoom</span>
         </div>
       </div>
+
+      {/* Notification permission prompt */}
+      {showPermissionPrompt && (
+        <div className="mx-3 mt-3 p-3 bg-gray-800/60 border border-gray-700 rounded-xl">
+          <div className="flex items-start gap-2">
+            <span className="text-base leading-none mt-0.5">🔔</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white">Enable notifications?</p>
+              <p className="text-xs text-gray-500 mt-0.5">Get notified of new messages when away</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-2.5">
+            <button
+              onClick={() => {
+                onRequestPermission();
+                setPermissionDismissed(true);
+              }}
+              className="flex-1 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg py-1.5 transition-colors"
+            >
+              Enable
+            </button>
+            <button
+              onClick={() => setPermissionDismissed(true)}
+              className="flex-1 text-xs font-medium text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg py-1.5 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Rooms section */}
       <div className="flex-1 overflow-y-auto px-2 py-3">
@@ -65,6 +105,7 @@ export function Sidebar({
                 room={room}
                 isActive={activeRoom?.id === room.id}
                 unreadCount={unreadCounts[room.id] ?? 0}
+                members={roomMembers[room.id] ?? []}
                 onClick={() => onSelectRoom(room)}
               />
             ))}

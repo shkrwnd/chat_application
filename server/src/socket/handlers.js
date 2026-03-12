@@ -22,8 +22,15 @@ function registerHandlers(io, socket) {
     if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Map());
     roomUsers.get(roomId).set(socket.id, { userId: user.id, username: user.username });
 
-    io.to(roomId).emit('active_users', Array.from(roomUsers.get(roomId).values()));
+    db.prepare(
+      'INSERT OR REPLACE INTO room_members (room_id, user_id, socket_id, joined_at) VALUES (?, ?, ?, ?)'
+    ).run(roomId, user.id, socket.id, Date.now());
+
+    const members = Array.from(roomUsers.get(roomId).values());
+    io.to(roomId).emit('active_users', members);
     socket.to(roomId).emit('user_joined', { userId: user.id, username: user.username });
+    // Broadcast to ALL clients so every sidebar stays in sync
+    io.emit('room_members_update', { roomId, members });
   });
 
   socket.on('leave_room', (roomId) => {
@@ -67,18 +74,23 @@ function registerHandlers(io, socket) {
 function leaveRoom(io, socket, roomId) {
   socket.leave(roomId);
 
+  db.prepare('DELETE FROM room_members WHERE room_id = ? AND socket_id = ?').run(roomId, socket.id);
+
   const room = roomUsers.get(roomId);
   if (!room) return;
 
   room.delete(socket.id);
 
+  const members = room.size === 0 ? [] : Array.from(room.values());
   if (room.size === 0) {
     roomUsers.delete(roomId);
   } else {
-    io.to(roomId).emit('active_users', Array.from(room.values()));
+    io.to(roomId).emit('active_users', members);
   }
 
   socket.to(roomId).emit('user_left', { userId: socket.userId, username: socket.username });
+  // Broadcast to ALL clients so every sidebar stays in sync
+  io.emit('room_members_update', { roomId, members });
 }
 
 module.exports = { registerHandlers };

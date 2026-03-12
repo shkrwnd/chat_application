@@ -33,6 +33,19 @@ db.exec(`
     FOREIGN KEY (room_id) REFERENCES rooms(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS room_members (
+    room_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    socket_id TEXT NOT NULL,
+    joined_at INTEGER NOT NULL,
+    PRIMARY KEY (room_id, socket_id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
+
+// Clear stale presence on server start (all previous sockets are gone)
+db.exec('DELETE FROM room_members');
 
 module.exports = db;

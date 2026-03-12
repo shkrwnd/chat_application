@@ -51,7 +51,7 @@ Thumbs.db
 skills-lock.json
 agent-transcripts/
 
-# Local claudemcp tooling
-package.json
-package-lock.json
+# Local claudemcp tooling (root only)
+/package.json
+/package-lock.json
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Avatar } from '../ui/avatar';
+import { cn } from '../../utils/cn';
 
 interface VideoTileProps {
   stream?: MediaStream;
@@ -7,7 +8,7 @@ interface VideoTileProps {
   isLocal?: boolean;
   isMuted?: boolean;
   isCameraOff?: boolean;
-  /** If true, always render as audio-only regardless of stream video tracks */
+  /** Voice-only call — never show video even if tracks exist */
   voiceOnly?: boolean;
 }
 
@@ -15,44 +16,55 @@ export function VideoTile({ stream, username, isLocal, isMuted, isCameraOff, voi
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream ?? null;
-    }
+    const el = videoRef.current;
+    if (!el) return;
+    el.srcObject = stream ?? null;
+    // Some browsers need an explicit play() after srcObject is set
+    if (stream) el.play().catch(() => {});
   }, [stream]);
 
-  const hasVideo = !voiceOnly && !isCameraOff && stream && stream.getVideoTracks().length > 0;
+  // Show actual video frames when: not voice-only, camera not off, stream has an enabled video track
+  const hasVideo =
+    !voiceOnly &&
+    !isCameraOff &&
+    !!stream &&
+    stream.getVideoTracks().some((t) => t.enabled);
 
   return (
     <div className="relative flex flex-col items-center justify-center bg-gray-900 border border-gray-700 rounded-xl overflow-hidden w-32 h-24 flex-shrink-0">
-      {hasVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`}
-        />
-      ) : (
-        <>
-          {/* Hidden audio-only element to play remote audio */}
-          {stream && !isLocal && (
-            <audio ref={videoRef as unknown as React.RefObject<HTMLAudioElement>} autoPlay />
-          )}
-          <Avatar username={username} size="md" className="mb-1" />
-        </>
-      )}
+      {/*
+        Always render <video> for both voice and video streams.
+        It plays audio even when visually hidden, avoiding the need for
+        a separate <audio> element (and the srcObject ref-cast hack).
+      */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal} // prevent echo on the local preview
+        className={cn(
+          'w-full h-full object-cover',
+          isLocal && 'scale-x-[-1]', // mirror local video
+          !hasVideo && 'hidden'       // hide visually when no video, but keep playing audio
+        )}
+      />
+
+      {/* Avatar shown when there is no video to display */}
+      {!hasVideo && <Avatar username={username} size="md" />}
 
       {/* Name badge */}
       <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm">
-        <span className="text-[10px] text-white/90 truncate block text-center">{isLocal ? 'You' : username}</span>
+        <span className="text-[10px] text-white/90 truncate block text-center">
+          {isLocal ? 'You' : username}
+        </span>
       </div>
 
-      {/* Mute indicator */}
+      {/* Muted microphone indicator */}
       {isMuted && (
         <div className="absolute top-1.5 right-1.5 bg-red-600 rounded-full p-0.5">
-          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            <line x1="3" y1="3" x2="21" y2="21" stroke="white" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
       )}

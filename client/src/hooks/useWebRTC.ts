@@ -51,8 +51,8 @@ export function useWebRTC(
   const callActiveRef = useRef(false);
 
   useEffect(() => { socketRef.current = socket; }, [socket]);
-  useEffect(() => { callRoomIdRef.current = callActive ? activeRoomId : null; }, [callActive, activeRoomId]);
-  useEffect(() => { callActiveRef.current = callActive; }, [callActive]);
+  // NOTE: callActiveRef and callRoomIdRef are set synchronously in joinCall/cleanupCall
+  // so signaling callbacks never read stale values between the React render cycles.
 
   // Create (or retrieve) a RTCPeerConnection for a remote user
   const createPeerConnection = useCallback((userId: string): RTCPeerConnection => {
@@ -97,6 +97,9 @@ export function useWebRTC(
 
   // Close all peer connections and stop local media
   const cleanupCall = useCallback(() => {
+    // Set refs synchronously so any in-flight callbacks see the correct state
+    callActiveRef.current = false;
+    callRoomIdRef.current = null;
     peerConnectionsRef.current.forEach((pc) => pc.close());
     peerConnectionsRef.current.clear();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -119,7 +122,10 @@ export function useWebRTC(
         video: type === 'video' ? { width: 640, height: 480, facingMode: 'user' } : false,
       });
       localStreamRef.current = stream;
+      // Set refs synchronously BEFORE emitting call_join so that the server's
+      // call_participants response is handled correctly (callbacks check these refs).
       callRoomIdRef.current = activeRoomId;
+      callActiveRef.current = true;
       setLocalStream(stream);
       setCallActive(true);
       setCallType(type);

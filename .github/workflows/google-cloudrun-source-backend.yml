@@ -17,7 +17,7 @@ on:
   workflow_dispatch: # Run manually from Actions tab
 
 env:
-  PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID
+  PROJECT_ID: 'canon-487215'
   REGION: 'us-central1' # TODO: update to your region
   SERVICE: 'chat-server' # TODO: update to your backend Cloud Run service name
 
@@ -37,7 +37,8 @@ jobs:
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider' # TODO: replace with your workload identity provider
+          project_id: '${{ env.PROJECT_ID }}'
+          workload_identity_provider: 'projects/782386821852/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
 
       - id: deploy
         name: 'Deploy to Cloud Run'
